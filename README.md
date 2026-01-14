@@ -1,4 +1,4 @@
-# 🏠 Housing Price Prediction in Taiwan
+# Housing Price Prediction in Taiwan
 
 **Predicting Housing Prices in Taiwan: A Comparative Evaluation of Machine Learning Models**
 
@@ -6,7 +6,7 @@ This repository contains my MBA thesis project, which focuses on predicting hous
 
 ---
 
-## 📖 Project Overview
+## Project Overview
 
 Accurate housing price prediction is essential for buyers, sellers, and policymakers. This project analyzes Taiwanese housing data and applies various machine learning models to predict property prices, comparing their performance based on standard regression metrics.
 
@@ -17,7 +17,7 @@ The study emphasizes:
 
 ---
 
-## 🎯 Objectives
+## Objectives
 
 - Explore key factors influencing housing prices in Taiwan
 - Build and evaluate multiple machine learning models
@@ -26,7 +26,7 @@ The study emphasizes:
 
 ---
 
-## 🗂 Dataset
+## Dataset
 
 - **Source**: Taiwan Ministry of Digital Affairs open data platform
 - **Target Variable**:  Sale price / price per square meter
@@ -40,7 +40,7 @@ The study emphasizes:
 
 ---
 
-## 🛠️ Models Implemented
+## Models Implemented
 
 The following models were implemented and compared:
 
@@ -50,7 +50,7 @@ The following models were implemented and compared:
 
 ---
 
-## 📊 Evaluation Metrics
+## Evaluation Metrics
 
 Model performance was evaluated using:
 
@@ -59,7 +59,7 @@ Model performance was evaluated using:
 
 ---
 
-## 🧪 Technologies & Tools
+## Technologies & Tools
 
 - **Programming Languages**: R
 - **Libraries (R)**:
@@ -75,7 +75,7 @@ Model performance was evaluated using:
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```text
 housing-price-prediction-taiwan/
