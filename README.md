@@ -77,20 +77,19 @@ Model performance was evaluated using:
 
 ## 📁 Repository Structure
 
+```text
 housing-price-prediction-taiwan/
-│
-├── processed data/         # Cleaned and preprocessed data
-│
-├── notebooks/
-│   ├── data_exploration.R  # EDA and visualization
-│   ├── preprocessing.R     # Data cleaning and feature engineering
-│   └── modeling.R          # Model training and evaluation
-│
+├── processed data/
+├── src/
+│   ├── 01_data_exploration.R
+│   ├── 02_preprocessing.R
+│   └── 03_modeling.R
 ├── results/
-│   ├── model_performance.csv
-│   └── figures/            # Plots and evaluation charts
-│
+│   ├── metrics/
+│   └── figures/
+├── reports/
+│   └── thesis.pdf
 ├── README.md
-└── LICENSE
-
+├── LICENSE
+└── .gitignore
 
