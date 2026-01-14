@@ -78,7 +78,9 @@ Model performance was evaluated using:
 
 ```text
 housing-price-prediction-taiwan/
-├── processed data/
+├── data/
+│   ├── raw/
+│   └── processed/
 ├── src/
 │   ├── 01_data_exploration.R
 │   ├── 02_preprocessing.R
