@@ -70,7 +70,6 @@ Model performance was evaluated using:
   - **readr** – data import
   - **lubridate** – date and time feature handling
   - **caret** – machine learning modeling and validation
-  - 
 - **Environment**:  RStudio
 
 ---
