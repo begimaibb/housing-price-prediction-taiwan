@@ -1,2 +1,96 @@
-# housing-price-prediction-taiwan
-Machine learning project to predict housing prices in Taiwan. Includes data preprocessing, feature engineering, and comparison of regression models.
+# 🏠 Housing Price Prediction in Taiwan
+
+**Predicting Housing Prices in Taiwan: A Comparative Evaluation of Machine Learning Models**
+
+This repository contains my MBA thesis project, which focuses on predicting housing prices in Taiwan using multiple machine learning models. The project evaluates and compares traditional and advanced ML techniques to identify the most effective approach for real estate price prediction.
+
+---
+
+## 📖 Project Overview
+
+Accurate housing price prediction is essential for buyers, sellers, and policymakers. This project analyzes Taiwanese housing data and applies various machine learning models to predict property prices, comparing their performance based on standard regression metrics.
+
+The study emphasizes:
+- Data preprocessing and feature engineering
+- Model comparison and evaluation
+- Practical insights for real-world real estate applications
+
+---
+
+## 🎯 Objectives
+
+- Explore key factors influencing housing prices in Taiwan
+- Build and evaluate multiple machine learning models
+- Compare model performance using statistical metrics
+- Identify the best-performing model for price prediction
+
+---
+
+## 🗂 Dataset
+
+- **Source**: Taiwan Ministry of Digital Affairs open data platform
+- **Target Variable**:  Sale price / price per square meter
+- **Features: ** 32 attributes including:
+  - Location-related variables
+  - Property age
+  - Number of rooms
+  - Distance to amenities
+  - Transaction-related attributes
+
+
+---
+
+## 🛠️ Models Implemented
+
+The following models were implemented and compared:
+
+- Linear Multiple Regression
+- Random Forest Regressor
+- Gradient Boosting Models
+
+---
+
+## 📊 Evaluation Metrics
+
+Model performance was evaluated using:
+
+- R² Score
+- Root Mean Squared Error (RMSE)
+
+---
+
+## 🧪 Technologies & Tools
+
+- **Programming Languages**: R
+- **Libraries (R)**:
+  - **dplyr** – data manipulation and transformation
+  - **ggplot2** – data visualization
+  - **Metrics** – model evaluation metrics
+  - **corrplot** – correlation analysis and visualization
+  - **readr** – data import
+  - **lubridate** – date and time feature handling
+  - **caret** – machine learning modeling and validation
+  - 
+- **Environment**:  RStudio
+
+---
+
+## 📁 Repository Structure
+
+housing-price-prediction-taiwan/
+│
+├── processed data/         # Cleaned and preprocessed data
+│
+├── notebooks/
+│   ├── data_exploration.R  # EDA and visualization
+│   ├── preprocessing.R     # Data cleaning and feature engineering
+│   └── modeling.R          # Model training and evaluation
+│
+├── results/
+│   ├── model_performance.csv
+│   └── figures/            # Plots and evaluation charts
+│
+├── README.md
+└── LICENSE
+
+
