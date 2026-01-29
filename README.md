@@ -84,7 +84,9 @@ housing-price-prediction-taiwan/
 ├── src/
 │   ├── 01_data_exploration.R
 │   ├── 02_preprocessing.R
-│   └── 03_modeling.R
+│   ├── 03_model_training_and_evaluation_MLR.R
+│   ├── 03_model_training_and_evaluation_RF.R
+│   └── 03_model_training_and_evaluation_XGB.R
 ├── results/
 │   ├── metrics/
 │   └── figures/
