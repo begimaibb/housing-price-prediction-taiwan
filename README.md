@@ -81,6 +81,11 @@ housing-price-prediction-taiwan/
 ├── data/
 │   ├── raw/
 │   └── processed/
+├── final_report.pdf
+├── final_report.Rmd
+├── results/
+│   ├── figures/
+│   └── model_metrics_table.png 
 ├── src/
 │   ├── 01_data_exploration.R
 │   ├── 02_preprocessing.R
@@ -88,10 +93,6 @@ housing-price-prediction-taiwan/
 │   ├── 03_model_training_and_evaluation_RF.R
 │   ├── 03_model_training_and_evaluation_XGB.R
 │   └── 04_display_metrics.R
-├── results/
-│   ├── figures/
-│   └── model_metrics_table.png 
-├── README.md
 ├── LICENSE
-└── .gitignore
+└── README.md
 
