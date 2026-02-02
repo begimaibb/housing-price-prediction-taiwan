@@ -81,8 +81,6 @@ housing-price-prediction-taiwan/
 ├── data/
 │   ├── raw/
 │   └── processed/
-├── final_report.pdf
-├── final_report.Rmd
 ├── results/
 │   ├── figures/
 │   └── model_metrics_table.png 
