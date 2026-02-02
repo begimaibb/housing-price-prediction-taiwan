@@ -95,5 +95,7 @@ housing-price-prediction-taiwan/
 │   └── 04_display_metrics.R
 ├── .gitignore
 ├── LICENSE
-└── README.md
+├── README.md
+├── final_report.Rmd
+└── final_report.pdf
 
