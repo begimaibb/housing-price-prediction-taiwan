@@ -1,0 +1,552 @@
+---
+title: "New Taipei City Housing Price Prediction"
+author: "Begimai Bolotbekova"
+date: "`2024-06-01`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: cosmo
+    highlight: tango
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 8,
+  fig.height = 5
+)
+
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(stringr)
+library(caret)
+library(randomForest)
+library(xgboost)
+library(Metrics)
+library(kableExtra)
+library(webshot2)
+
+```
+
+# Introduction{-}
+
+This project predicts **price per square meter (`sqmPrice`)** for apartments in **New Taipei City, Taiwan** using three machine learning models: MLR, Random Forest, and XGBoost.
+
+This project aims to predict the price per square meter (sqmPrice) for residential transactions in New Taipei City, Taiwan. The project uses a dataset covering housing sales transactions from 2018 to 2023. To find the most accurate predictive power, three distinct modeling approaches: Multiple Linear Regression (MLR), Random Forest, and XGBoost were evaluated.
+
+# Data Exploration
+
+```{r data-exploration}
+housing <- read_csv("data/RAW_new_taipei_housing_transactions_2018_2023.csv")
+str(housing)
+summary(housing)
+sapply(housing, function(x) sum(is.na(x)))
+
+ggplot(housing, aes(x = rps21)) +
+  geom_histogram(binwidth = 10000, fill="skyblue", color="black") +
+  labs(title = "Total Price Distribution")
+
+ggplot(housing, aes(x = rps22)) +
+  geom_histogram(binwidth = 10000, fill="lightgreen", color="black") +
+  labs(title = "Price per sqm Distribution")
+```
+
+# Data Preprocessing
+
+In this step, irrelevant columns and extreme outliers, which were identified via the IQR method, were removed. Missing values in urban zoning and parking categories were handled through logical imputation and recoding. Date formats were standardized from the Taiwanese calendar to Gregorian, and structural data, such as Chinese floor notations were converted into numeric values. Key features were engineered by calculating building age and transforming binary indicators into logical types. Finally, logarithmic transformations were applied to skewed numerical variables, such as price and area, to stabilize variance and improve model performance.
+
+```{r preprocessing}
+housing <- read_csv("data/RAW_new_taipei_housing_transactions_2018_2023.csv")
+housing <- housing %>% select(-rps01, -rps12)
+
+missing_rows_rps04 <- which(is.na(housing$rps04))
+housing$rps04[missing_rows_rps04[housing$rps05[missing_rows_rps04] != "NA"]] <- "non-urban"
+housing$rps04[is.na(housing$rps04)] <- names(sort(table(housing$rps04), decreasing = TRUE))[1]
+housing <- housing %>% select(-rps05, -rps06)
+
+taiwanese_to_date <- function(x) {
+  year <- x %/% 10000 + 1911
+  month <- (x %% 10000) %/% 100
+  day <- x %% 100
+  ymd(paste(year, month, day, sep = "-"))
+}
+
+housing <- housing %>% mutate(rps14 = taiwanese_to_date(rps14), rps07 = taiwanese_to_date(rps07)) %>% filter(!is.na(rps14), !is.na(rps10))
+
+housing$rps23[is.na(housing$rps23)] <- "no parking"
+
+cols <- c("rps03","rps15","rps21","rps22","rps24","rps25","rps30")
+for (col in cols) {
+  q1 <- quantile(housing[[col]], 0.25, na.rm = TRUE)
+  q3 <- quantile(housing[[col]], 0.75, na.rm = TRUE)
+  iqr <- q3 - q1
+  lower <- q1 - 1.5*iqr
+  upper <- q3 + 1.5*iqr
+  housing <- housing %>% filter(is.na(.data[[col]]) | (.data[[col]] >= lower & .data[[col]] <= upper))
+}
+
+housing$age <- round(as.numeric(difftime(housing$rps07, housing$rps14, units="days")) / 365.25)
+
+housing <- housing %>% rename(
+  district = district,
+  address = rps02,
+  landArea = rps03,
+  landUseZoning = rps04,
+  transactionDate = rps07,
+  package = rps08,
+  apartmentFloor = rps09,
+  totalFloors = rps10,
+  buildingType = rps11,
+  buildingMaterials = rps13,
+  constructionDate = rps14,
+  buildingArea = rps15,
+  room = rps16,
+  livingroom = rps17,
+  bathroom = rps18,
+  divisionWall = rps19,
+  management = rps20,
+  totalPrice = rps21,
+  sqmPrice = rps22,
+  parkingCategory = rps23,
+  parkingArea = rps24,
+  parkingPrice = rps25,
+  remarks = rps26,
+  transactionNumber = rps27,
+  mainBuildingArea = rps28,
+  annexBuildingArea = rps29,
+  balconyArea = rps30,
+  elevator = rps31
+)
+
+chinese_to_int <- function(x) {
+  map <- c("零"=0,"一"=1,"二"=2,"三"=3,"四"=4,"五"=5,"六"=6,"七"=7,"八"=8,"九"=9,"十"=10)
+  sapply(x, function(val) {
+    if(is.na(val)) return(NA_real_)
+    floors <- str_split(val, "[,，]")[[1]]
+    floors <- str_remove_all(floors, "[層樓]")
+    numeric_floors <- sapply(floors, function(f) { f <- str_trim(f); map[f] })
+    numeric_floors <- numeric_floors[!is.na(numeric_floors)]
+    if(length(numeric_floors)!=1) return(NA_real_)
+    numeric_floors
+  })
+}
+
+char_to_logical <- function(x) if_else(x=="有", TRUE, FALSE)
+
+housing <- housing %>% mutate(
+  management = char_to_logical(management),
+  elevator = char_to_logical(elevator),
+  totalPriceL = log(totalPrice),
+  balconyAreaL = log(balconyArea),
+  buildingAreaL = log(buildingArea),
+  parkingAreaL = log(parkingArea),
+  parkingPriceL = log(parkingPrice),
+  sqmPriceL = log(sqmPrice),
+  totalFloors = chinese_to_int(totalFloors),
+  apartmentFloor = chinese_to_int(apartmentFloor)
+)
+
+write_csv(housing, "data/PROCESSED_new_taipei_housing_transactions_2018_2023.csv")
+```
+
+# Model Training and Evaluation
+
+This section evaluates three models: Multiple Linear Regression (MLR), Random Forest (RF), and XGBoost.
+
+Each model is trained on 80% of the data and evaluated on the remaining 20% to estimate out-of-sample performance.
+
+## Multiple Linear Regression (MLR)
+
+```{r mlr-model}
+
+
+housing <- read_csv("data/PROCESSED_new_taipei_housing_transactions_2018_2023.csv")
+
+housing_X <- housing %>%
+  select(
+    sqmPriceL,
+    buildingAreaL,
+    age,
+    totalFloors,
+    district,
+    buildingType,
+    parkingAreaL,
+    balconyAreaL,
+    landUseZoning,
+    parkingCategory
+  ) %>%
+  filter(if_all(everything(), ~ !is.na(.) & !is.nan(.) & !is.infinite(.))) %>%
+  droplevels()
+
+
+smp_size <- floor(0.8 * nrow(housing_X))
+train_ind <- sample(seq_len(nrow(housing_X)), size = smp_size)
+
+train <- housing_X[train_ind, ]
+test  <- housing_X[-train_ind, ]
+
+Y_test <- test$sqmPriceL
+test$sqmPriceL <- NULL
+
+linearModel <- lm(sqmPriceL ~ ., data = train)
+summary(linearModel)
+
+predictions <- predict(linearModel, test)
+
+log_mse  <- mean((Y_test - predictions)^2)
+log_rmse <- rmse(Y_test, predictions)
+log_mae  <- mean(abs(Y_test - predictions))
+
+mlr_metrics_log <- data.frame(
+  Metric = c("MSE", "RMSE", "MAE"),
+  Value  = c(log_mse, log_rmse, log_mae)
+) %>%
+  mutate(Value = round(Value, 4))
+
+kable(mlr_metrics_log, caption = "MLR Log Scale Performance")
+
+
+actual_prices    <- exp(Y_test)
+predicted_prices <- exp(predictions)
+
+mse  <- mean((actual_prices - predicted_prices)^2)
+rmse_val <- rmse(actual_prices, predicted_prices)
+mae_val  <- mean(abs(actual_prices - predicted_prices))
+
+
+mlr_metrics_exp <- data.frame(
+  Metric = c("MSE", "RMSE", "MAE"),
+  Value  = c(mse, rmse_val, mae_val)
+) %>%
+  mutate(Value = round(Value, 2))
+
+kable(mlr_metrics_exp, caption = "MLR Original Scale Performance")
+
+
+head(
+  data.frame(
+    Actual = actual_prices,
+    Predicted = predicted_prices
+  ),
+  10
+)
+
+
+mlr_rmse <- rmse(actual_prices, predicted_prices)
+mlr_r2   <- 1 - sum((actual_prices - predicted_prices)^2)/sum((actual_prices - mean(actual_prices))^2)
+
+
+# ===============================
+# Visualizations
+# ===============================
+
+# Predicted vs Actual (log scale)
+
+ggplot(data.frame(Actual = Y_test, Predicted = predictions), aes(x = Actual, y = Predicted)) +
+  geom_point(color = "blue", alpha = 0.4) +
+  geom_abline(slope = 1, intercept = 0, color = "red", size = 1.2) +
+  labs(
+    title = "MLR: Predicted vs Actual (log scale)",
+    x = "Actual sqmPriceL",
+    y = "Predicted sqmPriceL"
+  ) +
+  theme_minimal()
+
+
+
+# Predicted vs Actual (original scale)
+ggplot(data.frame(Actual = actual_prices, Predicted = predicted_prices), aes(x = Actual, y = Predicted)) +
+  geom_point(color = "darkgreen", alpha = 0.4) +
+  geom_abline(slope = 1, intercept = 0, color = "red", size = 1.2) +
+  labs(
+    title = "MLR: Predicted vs Actual (original scale)",
+    x = "Actual sqmPrice(in NTD)",
+    y = "Predicted sqmPrice(in NTD)"
+  ) +
+  theme_minimal()
+  
+
+# Residuals plot
+residuals <- Y_test - predictions
+ggplot(data.frame(Fitted = predictions, Residuals = residuals), aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(
+    title = "MLR: Residuals vs Fitted",
+    x = "Fitted values",
+    y = "Residuals"
+  ) +
+  theme_minimal()
+
+```
+
+## Random Forest
+
+```{r rf-model}
+
+
+housing_X <- housing %>%
+  select(
+    sqmPriceL,
+    buildingAreaL,
+    age,
+    totalFloors,
+    district,
+    buildingType,
+    parkingAreaL,
+    balconyAreaL,
+    landUseZoning,
+    parkingCategory
+  ) %>%
+  filter(if_all(everything(), ~ !is.na(.) & !is.nan(.) & !is.infinite(.))) %>%
+  droplevels()
+
+smp_size <- floor(0.8 * nrow(housing_X))
+train_ind <- sample(seq_len(nrow(housing_X)), size = smp_size)
+
+train <- housing_X[train_ind, ]
+test  <- housing_X[-train_ind, ]
+
+Y_test <- test$sqmPriceL
+test$sqmPriceL <- NULL
+
+train_control <- trainControl(
+  method = "cv",
+  number = 3
+)
+
+mtry_grid <- expand.grid(
+  mtry = c(2, 4, 6)
+)
+
+rf_tuned <- train(
+  sqmPriceL ~ .,
+  data = train,
+  method = "rf",
+  trControl = train_control,
+  tuneGrid = mtry_grid,
+  ntree = 300,
+  importance = TRUE
+)
+
+print(rf_tuned)
+
+predictions_rf <- predict(rf_tuned, test)
+
+r2_log <- 1 - sum((Y_test - predictions_rf)^2) /
+  sum((Y_test - mean(Y_test))^2)
+
+rf_metrics <- data.frame(
+  Metric = c("MAE", "MSE", "RMSE", "R²"),
+  Value  = c(
+    mae(Y_test, predictions_rf),
+    mse(Y_test, predictions_rf),
+    rmse(Y_test, predictions_rf),
+    r2_log
+  )
+) %>%
+  mutate(Value = round(Value, 2)) 
+
+kable(rf_metrics, caption = "Random Forest – Log Scale Performance")
+
+
+actual_prices <- exp(Y_test)
+predicted_prices <- exp(predictions_rf)
+
+r2_exp <- 1 - sum((actual_prices - predicted_prices)^2) /
+  sum((actual_prices - mean(actual_prices))^2)
+
+rf_metrics_exp <- data.frame(
+  Metric = c("MAE", "MSE", "RMSE", "R²"),
+  Value  = c(
+    mae(actual_prices, predicted_prices),
+    mse(actual_prices, predicted_prices),
+    rmse(actual_prices, predicted_prices),
+    r2_exp
+  )
+) %>%
+  mutate(Value = round(Value, 2))  # Round to 2 decimals
+
+kable(rf_metrics_exp, caption = "Random Forest – Original Scale Performance")
+
+rf_rmse <- rmse(actual_prices, predicted_prices)
+rf_r2   <- 1 - sum((actual_prices - predicted_prices)^2)/sum((actual_prices - mean(actual_prices))^2)
+
+
+# -------------------------------
+# Visualizations
+# -------------------------------
+
+# Predicted vs Actual (log scale)
+ggplot(data = data.frame(Actual = Y_test, Predicted = predictions_rf), aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  labs(title = "Random Forest: Predicted vs Actual (log scale)",
+       x = "Actual sqmPriceL",
+       y = "Predicted sqmPriceL") +
+  theme_minimal()
+
+
+# Predicted vs Actual (original scale)
+ggplot(data = data.frame(Actual = actual_prices, Predicted = predicted_prices), aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.5, color = "darkgreen") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  labs(title = "Random Forest: Predicted vs Actual (original scale)",
+       x = "Actual sqmPrice (in NTD)",
+       y = "Predicted sqmPrice (in NTD)") +
+  theme_minimal()
+
+# Variable Importance
+varImpPlot(rf_tuned$finalModel, main = "Random Forest Variable Importance")
+
+
+```
+
+## XGBoost
+
+```{r xgb-model}
+
+
+housing_X <- housing %>%
+  select(
+    sqmPriceL,
+    buildingAreaL,
+    age,
+    totalFloors,
+    district,
+    buildingType,
+    parkingAreaL,
+    balconyAreaL,
+    landUseZoning,
+    parkingCategory
+  ) %>%
+  filter(if_all(everything(), ~ !is.na(.) & !is.nan(.) & !is.infinite(.))) %>%
+  droplevels()
+
+dummy_vars <- dummyVars(sqmPriceL ~ ., data = housing_X)
+housing_matrix <- predict(dummy_vars, housing_X) %>% as.matrix()
+
+Y <- housing_X$sqmPriceL
+
+smp_size <- floor(0.8 * nrow(housing_matrix))
+train_ind <- sample(seq_len(nrow(housing_matrix)), size = smp_size)
+
+X_train <- housing_matrix[train_ind, ]
+X_test  <- housing_matrix[-train_ind, ]
+
+Y_train <- Y[train_ind]
+Y_test  <- Y[-train_ind]
+
+dtrain <- xgb.DMatrix(data = X_train, label = Y_train)
+dtest  <- xgb.DMatrix(data = X_test)
+
+params <- list(
+  objective = "reg:squarederror",
+  eval_metric = "rmse",
+  eta = 0.05,
+  max_depth = 6,
+  subsample = 0.8,
+  colsample_bytree = 0.8
+)
+
+xgb_model <- xgb.train(
+  params = params,
+  data = dtrain,
+  nrounds = 300,
+  verbose = 0
+)
+
+predictions_xgb <- predict(xgb_model, dtest)
+
+
+r2_log <- 1 - sum((Y_test - predictions_xgb)^2) /
+  sum((Y_test - mean(Y_test))^2)
+
+xgb_metrics_log <- data.frame(
+  Metric = c("MAE", "MSE", "RMSE", "R²"),
+  Value  = c(
+    mae(Y_test, predictions_xgb),
+    mse(Y_test, predictions_xgb),
+    rmse(Y_test, predictions_xgb),
+    r2_log
+  )
+) %>%
+  mutate(Value = round(Value, 2))
+
+kable(xgb_metrics_log, caption = "XGBoost – Log Scale Performance")
+
+
+actual_prices <- exp(Y_test)
+predicted_prices <- exp(predictions_xgb)
+
+r2_exp <- 1 - sum((actual_prices - predicted_prices)^2) /
+  sum((actual_prices - mean(actual_prices))^2)
+
+xgb_metrics_exp <- data.frame(
+  Metric = c("MAE", "MSE", "RMSE", "R²"),
+  Value  = c(
+    mae(actual_prices, predicted_prices),
+    mse(actual_prices, predicted_prices),
+    rmse(actual_prices, predicted_prices),
+    r2_exp
+  )
+) %>%
+  mutate(Value = round(Value, 2)) 
+
+kable(xgb_metrics_exp, caption = "XGBoost – Original Scale Performance")
+
+xgb_rmse <- rmse(actual_prices, predicted_prices)
+xgb_r2   <- 1 - sum((actual_prices - predicted_prices)^2)/sum((actual_prices - mean(actual_prices))^2)
+
+
+# -------------------------------
+# Visualizations
+# -------------------------------
+
+# Predicted vs Actual (log scale)
+ggplot(data = data.frame(Actual = Y_test, Predicted = predictions_xgb), aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  labs(title = "XGBoost: Predicted vs Actual (log scale)",
+       x = "Actual sqmPriceL",
+       y = "Predicted sqmPriceL") +
+  theme_minimal()
+
+# Predicted vs Actual (original scale)
+ggplot(data = data.frame(Actual = actual_prices, Predicted = predicted_prices), aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.5, color = "darkgreen") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  labs(title = "XGBoost: Predicted vs Actual (original scale)",
+       x = "Actual sqmPrice (in NTD)",
+       y = "Predicted sqmPrice (in NTD)") +
+  theme_minimal()
+
+# Feature Importance
+xgb_imp <- xgb.importance(model = xgb_model)
+xgb.plot.importance(xgb_imp, top_n = 15, main = "XGBoost Feature Importance")
+
+
+
+```
+
+# Model Comparison
+
+```{r model-comparison}
+metrics_table <- data.frame(
+  Model = c("MLR","Random Forest","XGBoost"),
+  RMSE  = c(mlr_rmse, rf_rmse, xgb_rmse),
+  R2    = c(mlr_r2, rf_r2, xgb_r2)
+)
+metrics_table <- metrics_table %>% mutate(across(where(is.numeric), ~ round(.,2)))
+kable(metrics_table, caption="Comparison of RMSE and R² Across Models") %>% kable_styling(full_width=F, position="center", bootstrap_options=c("striped","hover"))
+```
